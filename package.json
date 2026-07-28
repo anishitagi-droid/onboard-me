@@ -1,0 +1,21 @@
+{
+  "name": "onboard-me",
+  "version": "0.1.0",
+  "description": "Auto-generated onboarding path for new contributors — analyzes commit history, file ownership, and open issues to produce ONBOARDING.md instead of a static CONTRIBUTING.md.",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  },
+  "bin": {
+    "onboard-me": "./bin/onboard-me.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@octokit/rest": "^21.0.0",
+    "commander": "^12.0.0"
+  }
+}

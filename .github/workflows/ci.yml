@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["18", "20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm install
+      - run: npm test
+
+  dry-run-smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install
+      - name: Run the real Layer 1 pipeline against this repo itself, in --dry-run mode
+        run: |
+          set -e
+          # No ANTHROPIC_API_KEY is configured in this CI, and none should be needed
+          # here: --dry-run exits right after gathering + aggregating (git history,
+          # docs, issues), before the single LLM call. This proves the part of the
+          # pipeline most prone to real bugs (path handling, git log parsing, docs
+          # extraction) actually works against a real repo with real history, not
+          # just synthetic fixtures.
+          node bin/onboard-me.js --path . --no-issues --dry-run > /tmp/dry-run-output.txt
+          cat /tmp/dry-run-output.txt
+          grep -q '"primary_languages"' /tmp/dry-run-output.txt
+          grep -q '"directories"' /tmp/dry-run-output.txt
