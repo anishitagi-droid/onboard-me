@@ -1,5 +1,14 @@
 import { execFileSync } from "node:child_process";
 
+// git supports gettext-based i18n: on a machine with a non-English locale and
+// the matching git-i18n package installed, messages like "does not have any
+// commits yet" render in that language instead. Every git call in this file
+// pattern-matches or otherwise depends on git's own text, so LC_ALL=C is
+// forced on all of them to keep that text in English regardless of the
+// caller's environment -- a well-known category of bug for any tool that
+// parses git's textual output, and a standard mitigation for it.
+const GIT_ENV = { ...process.env, LC_ALL: "C", LANG: "C" };
+
 // Top-level dirs that are just containers, not meaningful ownership units on
 // their own — for these, group one level deeper (src/billing, not src).
 const GENERIC_CONTAINER_DIRS = new Set([
@@ -68,7 +77,7 @@ export function gatherGit({ repoPath, windowDays }) {
     log = execFileSync(
       "git",
       ["log", `--since=${since}`, "--pretty=format:@@%H|%an|%ad", "--date=short", "--numstat"],
-      { cwd: repoPath, encoding: "utf-8", maxBuffer: 1024 * 1024 * 64, stdio: ["ignore", "pipe", "pipe"] }
+      { cwd: repoPath, encoding: "utf-8", maxBuffer: 1024 * 1024 * 64, stdio: ["ignore", "pipe", "pipe"], env: GIT_ENV }
     );
   } catch (err) {
     // Most common cause: brand-new repo with no commits yet ("does not have
@@ -149,6 +158,7 @@ export function detectRepoSlug(repoPath) {
       // working tool look like it just crashed. Verified concretely: the
       // message showed up on stderr even with the exception properly caught.
       stdio: ["ignore", "pipe", "pipe"],
+      env: GIT_ENV,
     }).trim();
     const match = url.match(/github\.com[:/]([^/]+)\/([^/.]+)(\.git)?$/);
     if (match) return `${match[1]}/${match[2]}`;
@@ -167,6 +177,7 @@ export function detectPrimaryLanguages(repoPath) {
       // same reasoning as detectRepoSlug above: "not a git repo" is handled
       // gracefully by the catch block, and shouldn't leak git's raw stderr.
       stdio: ["ignore", "pipe", "pipe"],
+      env: GIT_ENV,
     }).split("\n");
 
     const extToLang = {

@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gatherDocs } from "../src/gather-docs.js";
@@ -74,5 +74,31 @@ describe("gatherDocs", () => {
   test("missing repo path returns empty excerpts rather than throwing", () => {
     const result = gatherDocs({ repoPath: "/definitely/does/not/exist/xyz" });
     assert.deepEqual(result.docs_excerpts, []);
+  });
+
+  test("a broken symlink in docs/ is skipped, not a crash (regression test)", () => {
+    // Regression test for a real bug: readdirSync lists a broken symlink fine,
+    // but statSync/readFileSync on it throws ENOENT (it follows the link to a
+    // target that doesn't exist) -- and nothing caught that, so a single
+    // dangling symlink (a real, not-uncommon scenario, e.g. one pointing at a
+    // not-yet-generated build artifact) crashed gatherDocs entirely instead of
+    // just being skipped like any other best-effort-context failure.
+    const repo = makeRepo();
+    mkdirSync(join(repo, "docs"));
+    symlinkSync("/this/does/not/exist", join(repo, "docs", "broken-link.md"));
+    writeFileSync(join(repo, "docs", "real.md"), "# Real doc\nSome content.\n");
+
+    const result = gatherDocs({ repoPath: repo });
+    assert.equal(result.docs_excerpts.length, 1);
+    assert.equal(result.docs_excerpts[0].source, join("docs", "real.md"));
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  test("a broken symlink for README.md itself at the repo root is skipped, not a crash", () => {
+    const repo = makeRepo();
+    symlinkSync("/this/does/not/exist", join(repo, "README.md"));
+    const result = gatherDocs({ repoPath: repo });
+    assert.deepEqual(result.docs_excerpts, []);
+    rmSync(repo, { recursive: true, force: true });
   });
 });

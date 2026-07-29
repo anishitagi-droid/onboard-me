@@ -16,17 +16,37 @@ export function gatherDocs({ repoPath }) {
   for (const entry of rootEntries) {
     if (DOC_CANDIDATE_PATTERNS.some((pattern) => pattern.test(entry))) {
       const full = join(repoPath, entry);
-      if (statSync(full).isFile()) {
-        excerpts.push(...extractExcerpts(readFileSync(full, "utf-8"), entry));
+      // A broken symlink (a real, not-uncommon case -- e.g. one pointing at a
+      // build artifact that hasn't been generated yet) makes statSync/
+      // readFileSync throw ENOENT despite readdirSync having listed it fine.
+      // Docs are best-effort context, not a hard dependency (same philosophy
+      // gatherIssues already applies to its own failures) -- one unreadable
+      // entry shouldn't crash the whole tool. Verified concretely: an
+      // unguarded broken symlink in docs/ used to do exactly that.
+      try {
+        if (statSync(full).isFile()) {
+          excerpts.push(...extractExcerpts(readFileSync(full, "utf-8"), entry));
+        }
+      } catch {
+        continue;
       }
     }
   }
 
   for (const dir of DOC_DIRS) {
     const full = join(repoPath, dir);
-    if (existsSync(full) && statSync(full).isDirectory()) {
-      for (const entry of walkMarkdown(full)) {
+    let isDir;
+    try {
+      isDir = existsSync(full) && statSync(full).isDirectory();
+    } catch {
+      continue;
+    }
+    if (!isDir) continue;
+    for (const entry of walkMarkdown(full)) {
+      try {
         excerpts.push(...extractExcerpts(readFileSync(entry, "utf-8"), relative(repoPath, entry)));
+      } catch {
+        continue;
       }
     }
   }
@@ -39,7 +59,12 @@ function walkMarkdown(dir, depth = 0) {
   let files = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    const stat = statSync(full);
+    let stat;
+    try {
+      stat = statSync(full);
+    } catch {
+      continue; // broken symlink or a race with something deleting the entry
+    }
     if (stat.isDirectory()) files.push(...walkMarkdown(full, depth + 1));
     else if (entry.endsWith(".md")) files.push(full);
   }

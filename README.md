@@ -54,3 +54,12 @@ the plan stays stable rather than reshuffling on every run.
 - Does not hit any tracker besides GitHub Issues out of the box. Jira/Linear
   support would be a new `gather-issues-*.js` module feeding the same
   `candidate_issues` shape into `aggregate.js`.
+- Does not do anything special for monorepos. The spec calls this out as an
+  explicit design decision to make (one prompt per package, or one prompt
+  with a `packages` array) rather than a strict requirement, and for a first
+  release it's genuinely out of scope: a monorepo is analyzed as one flat
+  set of directories, same as any other repo. This is a reasonable default
+  (top-level package dirs still show up as their own grouped entries), but
+  a very large monorepo could produce a `directories` list too big to fit
+  comfortably in one prompt — splitting by package is the natural next step
+  if that becomes a real problem for your repo.

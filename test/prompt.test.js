@@ -55,6 +55,11 @@ describe("SYSTEM_PROMPT", () => {
     assert.match(SYSTEM_PROMPT, /materially changed/);
   });
 
+  test("addresses the single-owner-repo edge case from the spec's table (bus_factor_risk everywhere is expected, not a data problem)", () => {
+    assert.match(SYSTEM_PROMPT, /genuinely has one contributor/i);
+    assert.match(SYSTEM_PROMPT, /not a data problem/i);
+  });
+
   test("distinguishes insufficient_data from low_confidence, not just naming both enum values", () => {
     // Real gap found by testing: the schema's notes.issue enum offers two distinct
     // reasons for a gap, but the prompt only ever explained one of them ("insufficient
