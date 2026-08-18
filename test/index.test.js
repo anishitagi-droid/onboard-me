@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { run } from "../src/index.js";
+import { run, readPreviousPlan } from "../src/index.js";
 
 function git(repoPath, args) {
   execFileSync("git", args, { cwd: repoPath, encoding: "utf-8" });
@@ -88,5 +88,36 @@ describe("run (dry-run integration)", () => {
       repoSlug: "explicit/override",
     });
     assert.match(overrideOutput, /"name": "explicit\/override"/);
+  });
+});
+
+describe("readPreviousPlan", () => {
+  test("returns null when the file doesn't exist", () => {
+    assert.equal(readPreviousPlan("/tmp/definitely-does-not-exist-onboard-me.json"), null);
+  });
+
+  test("returns the parsed plan when the file is valid JSON", () => {
+    const dir = mkdtempSync(join(tmpdir(), "onboard-me-prevplan-test-"));
+    const path = join(dir, "onboarding.json");
+    writeFileSync(path, JSON.stringify({ architecture_tour: [] }));
+    assert.deepEqual(readPreviousPlan(path), { architecture_tour: [] });
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test("returns null instead of throwing when the file is corrupted (regression test)", () => {
+    // Regression test for a real inconsistency with this codebase's own
+    // resilience philosophy: every other input source (docs, issues, git's
+    // no-commits-yet case) treats a failure as best-effort and keeps going.
+    // A previous run killed mid-write, a full disk, or a hand-edit gone
+    // wrong all leave invalid JSON in onboarding.json -- which this tool
+    // itself only ever uses as a "prefer stability" hint, not a required
+    // input -- and JSON.parse used to throw straight out of run(), taking
+    // the entire tool down over a file whose only job is a soft hint.
+    const dir = mkdtempSync(join(tmpdir(), "onboard-me-prevplan-test-"));
+    const path = join(dir, "onboarding.json");
+    writeFileSync(path, "{ this is not valid json");
+    assert.doesNotThrow(() => readPreviousPlan(path));
+    assert.equal(readPreviousPlan(path), null);
+    rmSync(dir, { recursive: true, force: true });
   });
 });

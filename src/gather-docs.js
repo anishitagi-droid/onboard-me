@@ -51,7 +51,14 @@ export function gatherDocs({ repoPath }) {
     }
   }
 
-  return { docs_excerpts: excerpts.slice(0, MAX_EXCERPTS) };
+  // Slicing happens last and silently, on purpose up to this point -- but
+  // "silently" is the problem: the system prompt's own hard constraint #2
+  // says never silently guess or omit when data is thin, yet dropping
+  // excerpts past MAX_EXCERPTS did exactly that with no signal anywhere.
+  // Surfaced the same way gatherIssues already surfaces its own caveats
+  // (skipped_reason), so the LLM knows the docs picture may be incomplete
+  // instead of treating 20 excerpts as if that's everything that exists.
+  return { docs_excerpts: excerpts.slice(0, MAX_EXCERPTS), docs_truncated: excerpts.length > MAX_EXCERPTS };
 }
 
 function walkMarkdown(dir, depth = 0) {

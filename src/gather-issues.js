@@ -25,12 +25,28 @@ export async function gatherIssues({ repoSlug, token, octokitClient }) {
     // want "has ANY of these labels". But the 4 requests are otherwise fully
     // independent of each other and were being awaited one at a time, paying 4x
     // the round-trip latency for no reason. Run them concurrently instead.
-    const responses = await Promise.all(
+    //
+    // Promise.allSettled, not Promise.all: running 4 requests concurrently
+    // (rather than the sequential form this replaced) makes GitHub's secondary
+    // rate limiting -- which specifically targets bursts of concurrent requests
+    // -- more likely to reject one of the four, not less. Promise.all would
+    // throw away every successful label's results because one sibling request
+    // failed, which contradicts this function's own contract one line up:
+    // issue data is optional, best-effort context, not all-or-nothing.
+    const settled = await Promise.allSettled(
       CANDIDATE_LABELS.map((label) =>
         octokit.issues.listForRepo({ owner, repo, state: "open", labels: label, per_page: 15 })
       )
     );
-    const results = responses.flatMap((r) => r.data);
+    const failures = []; // { label, reason }
+    const results = [];
+    settled.forEach((outcome, i) => {
+      if (outcome.status === "fulfilled") {
+        results.push(...outcome.value.data);
+      } else {
+        failures.push({ label: CANDIDATE_LABELS[i], reason: outcome.reason });
+      }
+    });
 
     // de-dupe by issue number, drop anything that's actually a PR
     const seen = new Map();
@@ -50,6 +66,19 @@ export async function gatherIssues({ repoSlug, token, octokitClient }) {
       likely_paths: inferLikelyPaths(issue),
     }));
 
+    if (failures.length === CANDIDATE_LABELS.length) {
+      // Every label failed -- same shape of failure the pre-concurrency code
+      // reported, so keep surfacing the actual underlying error (helpful for
+      // debugging an auth/rate-limit problem) rather than a generic message.
+      return { candidate_issues: [], skipped_reason: `GitHub API error: ${failures[0].reason.message}` };
+    }
+    if (failures.length > 0) {
+      const detail = failures.map((f) => `${f.label} (${f.reason.message})`).join(", ");
+      return {
+        candidate_issues,
+        skipped_reason: `GitHub API error for label(s) ${detail}: results from the other label(s) are still included above`,
+      };
+    }
     return { candidate_issues };
   } catch (err) {
     return { candidate_issues: [], skipped_reason: `GitHub API error: ${err.message}` };

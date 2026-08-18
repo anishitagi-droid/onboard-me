@@ -8,7 +8,20 @@ export function renderMarkdown(plan) {
   // verified concretely: an owner name like "Jane | Doe" turned a 3-column row
   // into 5 columns. path/primary_owner both come from data the tool doesn't fully
   // control (real filesystem paths, git author names), so both get escaped.
-  const escapeCell = (value) => String(value ?? "").replace(/\|/g, "\\|").replace(/\r?\n+/g, " ");
+  //
+  // The same embedded-newline problem applies to every other field rendered as
+  // a single bullet/list-item line below (rationale, task_description,
+  // description, detail) even though none of them are table cells -- these are
+  // free-text fields the LLM fills in, and a stray "\n" produces a continuation
+  // line that isn't indented to CommonMark's list-item-continuation rules, which
+  // terminates the list item rather than staying part of it. Verified
+  // concretely the same way the table-cell case was: a rationale/detail
+  // containing an embedded newline visibly broke out of its numbered step /
+  // bullet in the rendered output. collapseNewlines handles this everywhere
+  // it's needed; escapeCell composes it with the pipe-escaping that's only
+  // actually needed inside real table cells.
+  const collapseNewlines = (value) => String(value ?? "").replace(/\r?\n+/g, " ");
+  const escapeCell = (value) => collapseNewlines(value).replace(/\|/g, "\\|");
 
   const lines = [];
   lines.push("# Onboarding Path");
@@ -19,8 +32,8 @@ export function renderMarkdown(plan) {
 
   lines.push("## Architecture Tour");
   for (const area of tour) {
-    lines.push(`### ${area.suggested_read_order}. ${area.area}`);
-    lines.push(area.description);
+    lines.push(`### ${area.suggested_read_order}. ${collapseNewlines(area.area)}`);
+    lines.push(collapseNewlines(area.description));
     lines.push(`**Key paths:** ${area.key_paths.join(", ") || "—"}  `);
     lines.push(`**Owners:** ${area.owners.join(", ") || "—"}`);
     lines.push("");
@@ -28,10 +41,10 @@ export function renderMarkdown(plan) {
 
   lines.push("## Suggested First Issues");
   for (const step of path) {
-    lines.push(`${step.step}. **${step.task_description}** _(${step.estimated_complexity} complexity)_`);
-    if (step.issue_id) lines.push(`   Issue: ${step.issue_id} · Area: ${step.area}`);
-    else lines.push(`   Area: ${step.area}`);
-    lines.push(`   Why this one: ${step.rationale}`);
+    lines.push(`${step.step}. **${collapseNewlines(step.task_description)}** _(${step.estimated_complexity} complexity)_`);
+    if (step.issue_id) lines.push(`   Issue: ${step.issue_id} · Area: ${collapseNewlines(step.area)}`);
+    else lines.push(`   Area: ${collapseNewlines(step.area)}`);
+    lines.push(`   Why this one: ${collapseNewlines(step.rationale)}`);
     lines.push("");
   }
 
@@ -51,7 +64,7 @@ export function renderMarkdown(plan) {
     lines.push("_Areas where there wasn't enough data to be confident — filling these in is itself a good first contribution._");
     lines.push("");
     for (const n of plan.notes) {
-      lines.push(`- **${n.field}** (${n.issue}): ${n.detail}`);
+      lines.push(`- **${collapseNewlines(n.field)}** (${n.issue}): ${collapseNewlines(n.detail)}`);
     }
     lines.push("");
   }

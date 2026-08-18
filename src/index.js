@@ -7,6 +7,33 @@ import { aggregateContext } from "./aggregate.js";
 import { generatePlan } from "./llm.js";
 import { renderMarkdown } from "./render.js";
 
+/**
+ * Reads back a previous onboarding.json for the "prefer stability" hint
+ * (system prompt constraint #6), tolerating a missing OR corrupted file.
+ *
+ * Every other input source in this pipeline (gatherDocs, gatherIssues,
+ * gatherGit's no-commits-yet case) is treated as best-effort: a failure
+ * there logs a note and the tool keeps going with less context, rather
+ * than refusing to run entirely. This file, which this tool itself writes,
+ * was the one exception -- a previous run killed mid-write, a full disk,
+ * or a hand-edit gone wrong all leave invalid JSON on disk, and
+ * JSON.parse would throw, taking the entire run down over what's only
+ * ever used as a stability hint, not a required input. Extracted into
+ * its own function (rather than left inline in run()) so this is
+ * directly unit-testable -- run() itself can't easily be, past the
+ * dry-run point, without also threading a fake LLM client through the
+ * whole orchestrator, which is a bigger change than this fix calls for.
+ */
+export function readPreviousPlan(jsonPath) {
+  if (!existsSync(jsonPath)) return null;
+  try {
+    return JSON.parse(readFileSync(jsonPath, "utf-8"));
+  } catch (err) {
+    console.log(`  (previous plan at ${jsonPath} could not be read, ignoring it: ${err.message})`);
+    return null;
+  }
+}
+
 export async function run(opts) {
   const repoPath = opts.path;
   const outDir = opts.out;
@@ -39,7 +66,7 @@ export async function run(opts) {
   }
 
   // --- Layer 2: one structured LLM call ---
-  const previousPlan = existsSync(jsonPath) ? JSON.parse(readFileSync(jsonPath, "utf-8")) : null;
+  const previousPlan = readPreviousPlan(jsonPath);
   console.log(`  calling ${opts.model}...`);
   const plan = await generatePlan({ context, previousPlan, model: opts.model });
 

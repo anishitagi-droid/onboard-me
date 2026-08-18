@@ -100,4 +100,38 @@ describe("gatherIssues", () => {
     assert.deepEqual(result.candidate_issues, []);
     assert.match(result.skipped_reason, /rate limit exceeded/);
   });
+
+  test("keeps results from label queries that succeeded when only some of the 4 fail (regression test)", async () => {
+    // Regression test for a real gap: the 4 label queries run concurrently
+    // (see the test above), and concurrency is exactly what makes GitHub's
+    // secondary rate limiting more likely to reject one request while its
+    // siblings succeed. Promise.all would have thrown away every successful
+    // label's issues because ONE sibling request failed -- contradicting this
+    // function's own "best-effort, optional context" contract. Two labels
+    // fail here; the issues from the other two must still come back.
+    const okIssue = (n, label) => ({
+      number: n,
+      title: `Issue from ${label}`,
+      labels: [{ name: label }],
+      comments: 0,
+      created_at: new Date().toISOString(),
+    });
+    const octokit = {
+      issues: {
+        listForRepo: async ({ labels }) => {
+          if (labels === "good first issue") return { data: [okIssue(1, labels)] };
+          if (labels === "beginner-friendly") return { data: [okIssue(2, labels)] };
+          throw new Error(`simulated failure for label "${labels}"`);
+        },
+      },
+    };
+    const result = await gatherIssues({ repoSlug: "acme/widget", octokitClient: octokit });
+    assert.equal(result.candidate_issues.length, 2, "expected both successful labels' issues to survive");
+    assert.deepEqual(
+      result.candidate_issues.map((i) => i.id).sort(),
+      ["GH-1", "GH-2"]
+    );
+    assert.match(result.skipped_reason, /help wanted/);
+    assert.match(result.skipped_reason, /good-first-issue/);
+  });
 });

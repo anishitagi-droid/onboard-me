@@ -18,6 +18,7 @@ describe("aggregateContext", () => {
     assert.deepEqual(ctx.directories, [{ path: "src" }]);
     assert.deepEqual(ctx.candidate_issues, [{ id: "GH-1" }]);
     assert.deepEqual(ctx.docs_excerpts, [{ source: "README.md" }]);
+    assert.equal(ctx.docs_truncated, false);
     assert.equal(ctx.issues_skipped_reason, null);
   });
 
@@ -41,5 +42,25 @@ describe("aggregateContext", () => {
       languages: [],
     });
     assert.equal(ctx.issues_skipped_reason, "--no-issues passed");
+  });
+
+  test("surfaces docs_truncated when gatherDocs reports it, defaults to false otherwise", () => {
+    const truncated = aggregateContext({
+      repoSlug: "acme/widget",
+      gitData: { analyzed_commits: 0, window_days: 180, directories: [] },
+      issuesData: { candidate_issues: [] },
+      docsData: { docs_excerpts: [], docs_truncated: true },
+      languages: [],
+    });
+    assert.equal(truncated.docs_truncated, true);
+
+    const notTruncated = aggregateContext({
+      repoSlug: "acme/widget",
+      gitData: { analyzed_commits: 0, window_days: 180, directories: [] },
+      issuesData: { candidate_issues: [] },
+      docsData: { docs_excerpts: [] }, // docs_truncated omitted entirely
+      languages: [],
+    });
+    assert.equal(notTruncated.docs_truncated, false);
   });
 });

@@ -101,4 +101,28 @@ describe("gatherDocs", () => {
     assert.deepEqual(result.docs_excerpts, []);
     rmSync(repo, { recursive: true, force: true });
   });
+
+  test("docs_truncated is false when everything fits under MAX_EXCERPTS", () => {
+    const repo = makeRepo();
+    writeFileSync(join(repo, "README.md"), "# Intro\\nOne paragraph.\\n");
+    const result = gatherDocs({ repoPath: repo });
+    assert.equal(result.docs_truncated, false);
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  test("docs_truncated is true when there are more than MAX_EXCERPTS headings (regression test)", () => {
+    // Regression test for a real inconsistency with this codebase's own
+    // stated philosophy: the system prompt's hard constraint #2 says never
+    // silently guess or omit when data is thin, but docs past the 20-excerpt
+    // cap were dropped with no signal anywhere that it happened.
+    const repo = makeRepo();
+    const manyHeadings = Array.from({ length: 25 }, (_, i) => `## Section ${i}\nSome text for section ${i}.\n`).join(
+      "\n"
+    );
+    writeFileSync(join(repo, "README.md"), manyHeadings);
+    const result = gatherDocs({ repoPath: repo });
+    assert.equal(result.docs_excerpts.length, 20);
+    assert.equal(result.docs_truncated, true);
+    rmSync(repo, { recursive: true, force: true });
+  });
 });

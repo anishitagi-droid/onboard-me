@@ -10,5 +10,6 @@ export function aggregateContext({ repoSlug, gitData, issuesData, docsData, lang
     candidate_issues: issuesData.candidate_issues,
     issues_skipped_reason: issuesData.skipped_reason || null,
     docs_excerpts: docsData.docs_excerpts,
+    docs_truncated: docsData.docs_truncated || false,
   };
 }

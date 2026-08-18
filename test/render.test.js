@@ -71,6 +71,46 @@ describe("renderMarkdown", () => {
     assert.ok(row.includes("Bob \\| Carol"));
   });
 
+  test("an embedded newline in rationale/detail/description does not break a numbered step or bullet out of its list (regression test)", () => {
+    // Regression test for the same bug class as the pipe-character test above,
+    // just missed in the non-table code paths when that fix was made. A
+    // CommonMark list-item continuation line must be indented to stay part of
+    // the item; a raw, unindented "\n" mid-string (plausible LLM output for a
+    // multi-sentence rationale/detail) ends the list item instead, verified
+    // concretely by rendering a plan built exactly this way and checking the
+    // second half of the sentence didn't end up on its own unindented line.
+    const md = renderMarkdown(
+      basePlan({
+        architecture_tour: [
+          {
+            area: "Billing",
+            description: "Line one.\nLine two.",
+            key_paths: [],
+            owners: [],
+            suggested_read_order: 1,
+          },
+        ],
+        first_issue_path: [
+          {
+            step: 1,
+            issue_id: "GH-1",
+            task_description: "Fix it",
+            area: "Billing",
+            rationale: "Because\nit is broken",
+            estimated_complexity: "low",
+          },
+        ],
+        notes: [{ field: "owners", issue: "low_confidence", detail: "Only one\ncommit in window" }],
+      })
+    );
+    const lines = md.split("\n");
+    assert.ok(!lines.includes("Line two."), "description's second line leaked onto its own unindented line");
+    assert.ok(lines.some((l) => l === "   Why this one: Because it is broken"));
+    assert.ok(!lines.includes("it is broken"), "rationale's second line leaked onto its own unindented line");
+    assert.ok(lines.some((l) => l === "- **owners** (low_confidence): Only one commit in window"));
+    assert.ok(!lines.includes("commit in window"), "detail's second line leaked onto its own unindented line");
+  });
+
   test("ownership table includes a Contributors column, not silently dropping data the LLM was given and returned", () => {
     // The contributors list is computed by gather-git.js, sent to the LLM, and
     // returned in ownership_map, but used to be dropped entirely at render time --
