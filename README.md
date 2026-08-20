@@ -1,5 +1,8 @@
 # onboard-me
 
+[![CI](https://github.com/anishitagi-droid/onboard-me/actions/workflows/ci.yml/badge.svg)](https://github.com/anishitagi-droid/onboard-me/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Auto-generated onboarding path for new contributors. Replaces a static,
 rotting `CONTRIBUTING.md` with an `ONBOARDING.md` regenerated from your
 actual git history, code ownership, and open issues.
@@ -23,18 +26,21 @@ export GITHUB_TOKEN=ghp_...        # optional — enables "first issue" candidat
 
 ## Usage
 
+Not published to npm — after `npm link` (see Install above), `onboard-me` is
+on your PATH. Without linking, run it directly with `node`:
+
 ```bash
 # from inside the repo you want an onboarding path for
-npx onboard-me
+onboard-me                    # or: node /path/to/onboard-me/bin/onboard-me.js
 
 # custom options
-npx onboard-me --window-days 90 --model claude-sonnet-5 --out ./docs
+onboard-me --window-days 90 --model claude-sonnet-5 --out ./docs
 
 # skip the LLM call and just inspect what would be sent to it
-npx onboard-me --dry-run
+onboard-me --dry-run
 
 # skip GitHub issue lookups (e.g. private repo without a token)
-npx onboard-me --no-issues
+onboard-me --no-issues
 ```
 
 ## Output
